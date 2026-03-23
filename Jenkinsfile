@@ -4,6 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'rajugsk20/devops-flask-app'
         IMAGE_TAG = "${BUILD_NUMBER}"
+        CONTAINER_NAME = 'flask-app'
     }
 
     stages {
@@ -15,7 +16,7 @@ pipeline {
 
         stage('Login to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'DockerHub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
                 }
             }
@@ -26,6 +27,15 @@ pipeline {
                 sh 'docker push ${IMAGE_NAME}:${IMAGE_TAG}'
             }
         }
+
+        stage('Deploy Container') {
+            steps {
+                sh '''
+                    docker rm -f ${CONTAINER_NAME} || true
+                    docker run -d -p 5000:5000 --name ${CONTAINER_NAME} ${IMAGE_NAME}:${IMAGE_TAG}
+                '''
+            }
+        }
     }
 
     post {
@@ -33,7 +43,7 @@ pipeline {
             sh 'docker logout || true'
         }
         success {
-            echo "Image pushed successfully: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Build and deployment successful: ${IMAGE_NAME}:${IMAGE_TAG}"
         }
     }
 }
