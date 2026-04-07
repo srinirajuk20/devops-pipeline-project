@@ -4,7 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'rajugsk20/devops-flask-app'
         IMAGE_TAG = "${BUILD_NUMBER}"
-        CONTAINER_NAME = 'flask-app'
+        EC2_HOST  = '18.171.164.82'
     }
 
     stages {
@@ -16,7 +16,7 @@ pipeline {
 
         stage('Login to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'DockerHub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
                 }
             }
@@ -28,12 +28,11 @@ pipeline {
             }
         }
 
-        stage('Deploy Container') {
+        stage('Deploy to EC2') {
             steps {
-                sh '''
-                    docker rm -f ${CONTAINER_NAME} || true
-                    docker run -d -p 5000:5000 --name ${CONTAINER_NAME} ${IMAGE_NAME}:${IMAGE_TAG}
-                '''
+                sshagent(credentials: ['ec2-ssh-key']) {
+                    sh './scripts/deploy_to_ec2.sh ${EC2_HOST} ${IMAGE_NAME} ${IMAGE_TAG}'
+                }
             }
         }
     }
@@ -43,7 +42,7 @@ pipeline {
             sh 'docker logout || true'
         }
         success {
-            echo "Build and deployment successful: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Build, push, and EC2 deployment successful: ${IMAGE_NAME}:${IMAGE_TAG}"
         }
     }
 }
