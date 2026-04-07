@@ -56,7 +56,7 @@ resource "aws_instance" "flask_server" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
   vpc_security_group_ids = [aws_security_group.flask_sg.id]
-
+  key_name = "key-171125"
   tags = {
     Name = "flask-ec2"
   }
