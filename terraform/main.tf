@@ -57,6 +57,16 @@ resource "aws_instance" "flask_server" {
   instance_type = var.instance_type
   vpc_security_group_ids = [aws_security_group.flask_sg.id]
   key_name = "key-171125"
+  user_data = <<-EOF
+              #!/bin/bash
+              apt update -y
+              apt install docker.io -y
+              systemctl start docker
+              systemctl enable docker
+
+              docker pull rajugsk20/devops-flask-app:15
+              docker run -d -p 5000:5000 rajugsk20/devops-flask-app:15
+              EOF
   tags = {
     Name = "flask-ec2"
   }
