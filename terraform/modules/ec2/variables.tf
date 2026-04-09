@@ -1,14 +1,13 @@
-variable "aws_region" {
-  type = string
-}
-
-variable "bucket_name" {
+variable "ami_id" {
   type = string
 }
 
 variable "instance_type" {
-  type    = string
-  default = "t3.micro"
+  type = string
+}
+
+variable "security_group_id" {
+  type = string
 }
 
 variable "environment" {
