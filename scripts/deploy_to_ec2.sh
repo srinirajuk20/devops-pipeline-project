@@ -1,17 +1,25 @@
 #!/bin/bash
-set -e
 
-EC2_HOST=$1
+EC2_IP=$1
 IMAGE_NAME=$2
-IMAGE_TAG=$3
+TAG=$3
 
-ssh -o StrictHostKeyChecking=no ubuntu@"$EC2_HOST" << EOF
-  OLD_CONTAINER=\$(sudo docker ps -q --filter "publish=5000")
-  if [ -n "\$OLD_CONTAINER" ]; then
-    sudo docker rm -f \$OLD_CONTAINER
-  fi
+ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << EOF
 
-  sudo docker rm -f flask-app || true
-  sudo docker pull ${IMAGE_NAME}:${IMAGE_TAG}
-  sudo docker run -d -p 5000:5000 --name flask-app ${IMAGE_NAME}:${IMAGE_TAG}
+# Pull latest image
+docker pull $IMAGE_NAME:$TAG
+
+# Stop old container (if exists)
+docker stop flask-app || true
+
+# Remove old container
+docker rm flask-app || true
+
+# Run new container
+docker run -d \
+  --name flask-app \
+    -p 5000:5000 \
+      --restart unless-stopped \
+  $IMAGE_NAME:$TAG
+
 EOF
