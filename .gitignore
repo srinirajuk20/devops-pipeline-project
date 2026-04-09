@@ -5,4 +5,4 @@ terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/*.tfstate
 terraform/*.tfstate.*
-key-171126.pem
+*.pem
