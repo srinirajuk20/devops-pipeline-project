@@ -3,11 +3,11 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'rajugsk20/devops-flask-app'
-        IMAGE_TAG = "${BUILD_NUMBER}"
-        EC2_HOST  = '18.171.164.82'
+        IMAGE_TAG  = "${BUILD_NUMBER}"
     }
 
     stages {
+
         stage('Build Docker Image') {
             steps {
                 sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile app'
@@ -16,7 +16,11 @@ pipeline {
 
         stage('Login to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'DockerHub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'DockerHub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
                     sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
                 }
             }
@@ -28,9 +32,23 @@ pipeline {
             }
         }
 
+        stage('Get EC2 Public IP') {
+            steps {
+                script {
+                    env.EC2_HOST = sh(
+                        script: 'cd terraform && terraform output -raw instance_public_ip',
+                        returnStdout: true
+                    ).trim()
+
+                    echo "EC2 IP: ${env.EC2_HOST}"
+                }
+            }
+        }
+
         stage('Deploy to EC2') {
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
+                    sh 'chmod +x ./scripts/deploy_to_ec2.sh'
                     sh './scripts/deploy_to_ec2.sh ${EC2_HOST} ${IMAGE_NAME} ${IMAGE_TAG}'
                 }
             }
@@ -42,7 +60,7 @@ pipeline {
             sh 'docker logout || true'
         }
         success {
-            echo "Build, push, and EC2 deployment successful: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Deployment successful on ${EC2_HOST}"
         }
     }
 }
