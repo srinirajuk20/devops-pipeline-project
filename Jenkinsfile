@@ -2,15 +2,25 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'rajugsk20/devops-flask-app'
-        IMAGE_TAG  = "${BUILD_NUMBER}"
+        IMAGE_NAME         = 'rajugsk20/devops-flask-app'
+        IMAGE_TAG          = "${BUILD_NUMBER}"
         AWS_DEFAULT_REGION = 'eu-west-2'
+        TERRAFORM_DIR      = 'terraform'
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '15'))
     }
 
     stages {
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile app'
+                sh '''
+                    set -euxo pipefail
+                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile app
+                '''
             }
         }
 
@@ -21,14 +31,20 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                    sh '''
+                        set -euxo pipefail
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    '''
                 }
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                sh 'docker push ${IMAGE_NAME}:${IMAGE_TAG}'
+                sh '''
+                    set -euxo pipefail
+                    docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                '''
             }
         }
 
@@ -38,7 +54,10 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-jenkins-creds'
                 ]]) {
-                    sh 'aws sts get-caller-identity'
+                    sh '''
+                        set -euxo pipefail
+                        aws sts get-caller-identity
+                    '''
                 }
             }
         }
@@ -49,7 +68,26 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-jenkins-creds'
                 ]]) {
-                    sh 'cd terraform && terraform init -reconfigure'
+                    sh '''
+                        set -euxo pipefail
+                        cd ${TERRAFORM_DIR}
+                        terraform init -reconfigure
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-jenkins-creds'
+                ]]) {
+                    sh '''
+                        set -euxo pipefail
+                        cd ${TERRAFORM_DIR}
+                        terraform validate
+                    '''
                 }
             }
         }
@@ -60,7 +98,11 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-jenkins-creds'
                 ]]) {
-                    sh 'cd terraform && terraform apply -auto-approve'
+                    sh '''
+                        set -euxo pipefail
+                        cd ${TERRAFORM_DIR}
+                        terraform apply -auto-approve
+                    '''
                 }
             }
         }
@@ -74,11 +116,11 @@ pipeline {
                     script {
                         env.EC2_HOST = sh(
                             script: '''
-                                set -e
-                                cd terraform
+                                set -euo pipefail
+                                cd ${TERRAFORM_DIR}
                                 IP=$(terraform output -raw instance_public_ip 2>/dev/null || true)
                                 if [ -z "$IP" ]; then
-                                  echo "ERROR: Terraform output instance_public_ip is empty"
+                                  echo "ERROR: instance_public_ip output is empty"
                                   exit 1
                                 fi
                                 echo "$IP"
@@ -86,7 +128,7 @@ pipeline {
                             returnStdout: true
                         ).trim()
 
-                        echo "EC2_HOST: ${env.EC2_HOST}"
+                        echo "EC2_HOST resolved to: ${env.EC2_HOST}"
                     }
                 }
             }
@@ -95,17 +137,17 @@ pipeline {
         stage('Wait for EC2 SSH') {
             steps {
                 sh '''
-                    set -e
-                    echo "Waiting for EC2 SSH on ${EC2_HOST}..."
+                    set -euxo pipefail
+                    echo "Waiting for SSH on ${EC2_HOST}..."
                     for i in $(seq 1 18); do
                       if nc -z ${EC2_HOST} 22; then
-                        echo "EC2 SSH is ready"
+                        echo "SSH is ready on ${EC2_HOST}"
                         exit 0
                       fi
-                      echo "Retry $i/18: SSH not ready yet, sleeping 10s..."
+                      echo "Attempt $i/18: SSH not ready yet, sleeping 10s..."
                       sleep 10
                     done
-                    echo "EC2 SSH did not become ready in time"
+                    echo "ERROR: EC2 SSH did not become ready in time"
                     exit 1
                 '''
             }
@@ -114,9 +156,30 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
-                    sh 'chmod +x ./scripts/deploy_to_ec2.sh'
-                    sh './scripts/deploy_to_ec2.sh ${EC2_HOST} ${IMAGE_NAME} ${IMAGE_TAG}'
+                    sh '''
+                        set -euxo pipefail
+                        chmod +x ./scripts/deploy_to_ec2.sh
+                        ./scripts/deploy_to_ec2.sh ${EC2_HOST} ${IMAGE_NAME} ${IMAGE_TAG}
+                    '''
                 }
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                    set -euxo pipefail
+                    for i in $(seq 1 12); do
+                      if curl -fsS http://${EC2_HOST}:5000 > /dev/null; then
+                        echo "Application is healthy"
+                        exit 0
+                      fi
+                      echo "Health check failed, retrying in 5s..."
+                      sleep 5
+                    done
+                    echo "ERROR: Application health check failed"
+                    exit 1
+                '''
             }
         }
     }
@@ -129,7 +192,7 @@ pipeline {
             echo "Build, infra apply, and deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} on ${EC2_HOST}"
         }
         failure {
-            echo 'Pipeline failed. Check Terraform apply/output, AWS credentials, SSH credentials, or deploy script logs.'
+            echo 'Pipeline failed. Check Terraform, AWS credentials, SSH access, deploy script, or app health.'
         }
     }
 }
