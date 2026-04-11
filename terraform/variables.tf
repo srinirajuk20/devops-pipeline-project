@@ -18,3 +18,8 @@ variable "environment" {
 variable "key_name" {
   type = string
 }
+
+variable "ami_id" {
+  description = "Custom AMI ID for EC2 instance"
+  type        = string
+}

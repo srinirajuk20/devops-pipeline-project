@@ -1,19 +1,3 @@
-data "aws_ami" "ubuntu" {
-  most_recent = true
-
-  owners = ["099720109477"]
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
 module "security_group" {
   source      = "./modules/security-group"
   environment = var.environment
@@ -21,7 +5,7 @@ module "security_group" {
 
 module "ec2" {
   source            = "./modules/ec2"
-  ami_id            = data.aws_ami.ubuntu.id
+  ami_id            = var.ami_id
   instance_type     = var.instance_type
   security_group_id = module.security_group.security_group_id
   environment       = var.environment
