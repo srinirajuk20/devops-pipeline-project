@@ -1,25 +1,24 @@
-variable "aws_region" {
-  type = string
-}
-
-variable "bucket_name" {
-  type = string
+variable "environment" {
+  description = "Deployment environment"
+  type        = string
 }
 
 variable "instance_type" {
-  type    = string
-  default = "t3.micro"
-}
-
-variable "environment" {
-  type = string
+  description = "EC2 instance type"
+  type        = string
 }
 
 variable "key_name" {
-  type = string
+  description = "AWS EC2 key pair name"
+  type        = string
+}
+
+variable "bucket_name" {
+  description = "S3 bucket name"
+  type        = string
 }
 
 variable "ami_id" {
-  description = "Custom AMI ID for EC2 instance"
+  description = "Custom AMI ID for EC2"
   type        = string
 }

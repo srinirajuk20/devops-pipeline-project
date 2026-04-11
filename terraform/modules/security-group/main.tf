@@ -11,12 +11,13 @@ resource "aws_security_group" "flask_sg" {
   }
 
   ingress {
-    description = "Allow SSH"
+    description = "Allow SSH from Jenkins"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+    cidr_blocks = ["YOUR_PUBLIC_IP/32"]
+}
+
 
   egress {
     from_port   = 0
