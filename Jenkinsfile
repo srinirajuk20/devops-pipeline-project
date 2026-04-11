@@ -4,6 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'rajugsk20/devops-flask-app'
         IMAGE_TAG  = "${BUILD_NUMBER}"
+        AWS_DEFAULT_REGION = 'eu-west-2'
     }
 
     stages {
@@ -31,25 +32,44 @@ pipeline {
             }
         }
 
-        stage('Terraform Init') {
-            steps {
-                sh 'cd terraform && terraform init -reconfigure'
+stage('Check AWS Access') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-jenkins-creds'
+        ]]) {
+            sh 'aws sts get-caller-identity'
+        }
+    }
+}
+stage('Terraform Init') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-jenkins-creds'
+        ]]) {
+            sh 'cd terraform && terraform init -reconfigure'
+        }
+    }
+}
+
+stage('Get EC2 Public IP') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-jenkins-creds'
+        ]]) {
+            script {
+                env.EC2_HOST = sh(
+                    script: 'cd terraform && terraform output -raw instance_public_ip',
+                    returnStdout: true
+                ).trim()
+
+                echo "EC2_HOST: ${env.EC2_HOST}"
             }
         }
-
-        stage('Get EC2 Public IP') {
-            steps {
-                script {
-                    env.EC2_HOST = sh(
-                        script: 'cd terraform && terraform output -raw instance_public_ip',
-                        returnStdout: true
-                    ).trim()
-
-                    echo "EC2_HOST resolved to: ${env.EC2_HOST}"
-                }
-            }
-        }
-
+    }
+}
         stage('Deploy to EC2') {
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
