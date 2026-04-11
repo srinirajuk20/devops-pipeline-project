@@ -7,7 +7,6 @@ pipeline {
     }
 
     stages {
-
         stage('Build Docker Image') {
             steps {
                 sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile app'
@@ -32,6 +31,12 @@ pipeline {
             }
         }
 
+        stage('Terraform Init') {
+            steps {
+                sh 'cd terraform && terraform init -reconfigure'
+            }
+        }
+
         stage('Get EC2 Public IP') {
             steps {
                 script {
@@ -40,7 +45,7 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    echo "EC2 IP: ${env.EC2_HOST}"
+                    echo "EC2_HOST resolved to: ${env.EC2_HOST}"
                 }
             }
         }
@@ -60,7 +65,10 @@ pipeline {
             sh 'docker logout || true'
         }
         success {
-            echo "Deployment successful on ${EC2_HOST}"
+            echo "Build, push, and deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} on ${EC2_HOST}"
+        }
+        failure {
+            echo 'Pipeline failed. Check Terraform init/output, SSH credentials, or deploy script logs.'
         }
     }
 }

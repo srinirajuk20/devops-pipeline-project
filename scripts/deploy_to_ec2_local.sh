@@ -4,8 +4,9 @@ set -euxo pipefail
 EC2_IP="$1"
 IMAGE_NAME="$2"
 TAG="$3"
+KEY_PATH="$4"
 
-ssh -tt -o StrictHostKeyChecking=no "ubuntu@${EC2_IP}" <<EOF
+ssh -i "$KEY_PATH" -tt -o StrictHostKeyChecking=no "ubuntu@${EC2_IP}" <<EOF
 set -euxo pipefail
 echo "Connected to \$(hostname)"
 sudo systemctl start docker
