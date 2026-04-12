@@ -32,15 +32,21 @@ sudo docker run -d -p 5000:5000 --name flask-app $IMAGE_NAME:$IMAGE_TAG
 
 echo "Configuring Nginx reverse proxy..."
 sudo bash -c 'cat > /etc/nginx/sites-available/default << EONGINX
+
 server {
     listen 80;
+    server_name _;
 
     location / {
         proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        }
 }
+
+
 EONGINX'
 
 echo "Restarting Nginx..."
