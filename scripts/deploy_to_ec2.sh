@@ -1,29 +1,51 @@
 #!/bin/bash
-set -euxo pipefail
 
-EC2_IP="$1"
-IMAGE_NAME="$2"
-TAG="$3"
+EC2_IP=$1
+IMAGE_NAME=$2
+IMAGE_TAG=$3
 
-ssh -o BatchMode=yes -o StrictHostKeyChecking=no "ubuntu@${EC2_IP}" /bin/bash <<EOF
-set -euxo pipefail
+echo "Deploying to EC2: $EC2_IP"
 
-echo "Connected to \$(hostname)"
+ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << EOF
 
-sudo -n systemctl enable docker
-sudo -n systemctl start docker
+echo "Updating packages..."
+sudo apt update -y
 
-sudo -n docker pull ${IMAGE_NAME}:${TAG}
-sudo -n docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}"
+echo "Installing Docker if not present..."
+sudo apt install -y docker.io
+sudo systemctl start docker
+sudo systemctl enable docker
 
-sudo -n docker stop flask-app || true
-sudo -n docker rm flask-app || true
+echo "Installing Nginx..."
+sudo apt install -y nginx
+sudo systemctl start nginx
+sudo systemctl enable nginx
 
-sudo -n docker run -d \
-  --name flask-app \
-  --restart unless-stopped \
-  -p 5000:5000 \
-  ${IMAGE_NAME}:${TAG}
+echo "Stopping old container if exists..."
+sudo docker rm -f flask-app || true
 
-sudo -n docker ps -a
+echo "Pulling latest image..."
+sudo docker pull $IMAGE_NAME:$IMAGE_TAG
+
+echo "Running container..."
+sudo docker run -d -p 5000:5000 --name flask-app $IMAGE_NAME:$IMAGE_TAG
+
+echo "Configuring Nginx reverse proxy..."
+sudo bash -c 'cat > /etc/nginx/sites-available/default << EONGINX
+server {
+    listen 80;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+}
+EONGINX'
+
+echo "Restarting Nginx..."
+sudo systemctl restart nginx
+
+echo "Deployment completed!"
+
 EOF
