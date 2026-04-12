@@ -169,7 +169,7 @@ bash ./scripts/deploy_to_ec2.sh ${EC2_HOST} ${IMAGE_NAME} ${IMAGE_TAG}
                 sh '''#!/bin/bash
 set -euxo pipefail
 for i in $(seq 1 12); do
-  if curl -fsS http://${EC2_HOST}:5000 > /dev/null; then
+  if curl -fsS http://${EC2_HOST}:80 > /dev/null; then
     echo "Application is healthy"
     exit 0
   fi
