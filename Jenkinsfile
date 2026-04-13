@@ -20,6 +20,7 @@ pipeline {
                 sh '''#!/bin/bash
 set -euxo pipefail
 docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile app
+docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
 '''
             }
         }
@@ -44,6 +45,7 @@ echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                 sh '''#!/bin/bash
 set -euxo pipefail
 docker push ${IMAGE_NAME}:${IMAGE_TAG}
+docker push ${IMAGE_NAME}:latest
 '''
             }
         }
