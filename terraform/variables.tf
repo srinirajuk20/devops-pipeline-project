@@ -22,3 +22,8 @@ variable "ami_id" {
   description = "Custom AMI ID for EC2"
   type        = string
 }
+
+variable "alb_name" {
+  type    = string
+  default = "devops-alb"
+}
