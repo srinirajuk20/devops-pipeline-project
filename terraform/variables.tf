@@ -27,3 +27,23 @@ variable "alb_name" {
   type    = string
   default = "devops-alb"
 }
+
+variable "desired_capacity" {
+  type    = number
+  default = 1
+}
+
+variable "min_size" {
+  type    = number
+  default = 1
+}
+
+variable "max_size" {
+  type    = number
+  default = 2
+}
+
+variable "image_name" {
+  type    = string
+  default = "rajugsk20/devops-flask-app"
+}

@@ -109,72 +109,15 @@ terraform apply -auto-approve
             }
         }
 
-        stage('Get EC2 Public IP') {
+        stage('Get ALB DNS') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-jenkins-creds'
                 ]]) {
                     script {
-                        env.EC2_HOST = sh(
+                        env.ALB_DNS = sh(
                             script: '''#!/bin/bash
-set -euo pipefail
-cd ${TERRAFORM_DIR}
-IP=$(terraform output -raw instance_public_ip 2>/dev/null || true)
-if [ -z "$IP" ]; then
-  echo "ERROR: instance_public_ip output is empty"
-  exit 1
-fi
-echo "$IP"
-''',
-                            returnStdout: true
-                        ).trim()
-
-                        echo "EC2_HOST resolved to: ${env.EC2_HOST}"
-                    }
-                }
-            }
-        }
-
-        stage('Wait for EC2 SSH') {
-            steps {
-                sh '''#!/bin/bash
-set -euxo pipefail
-echo "Waiting for SSH on ${EC2_HOST}..."
-for i in $(seq 1 18); do
-  if nc -z ${EC2_HOST} 22; then
-    echo "SSH is ready on ${EC2_HOST}"
-    exit 0
-  fi
-  echo "Attempt $i/18: SSH not ready yet, sleeping 10s..."
-  sleep 10
-done
-echo "ERROR: EC2 SSH did not become ready in time"
-exit 1
-'''
-            }
-        }
-
-        stage('Deploy to EC2') {
-            steps {
-                sshagent(credentials: ['ec2-ssh-key']) {
-                    sh '''#!/bin/bash
-set -euxo pipefail
-bash ./scripts/deploy_to_ec2.sh ${EC2_HOST} ${IMAGE_NAME} ${IMAGE_TAG}
-'''
-                }
-            }
-        }
-
-stage('Get ALB DNS') {
-    steps {
-        withCredentials([[
-            $class: 'AmazonWebServicesCredentialsBinding',
-            credentialsId: 'aws-jenkins-creds'
-        ]]) {
-            script {
-                env.ALB_DNS = sh(
-                    script: '''#!/bin/bash
 set -euo pipefail
 cd ${TERRAFORM_DIR}
 DNS=$(terraform output -raw alb_dns_name 2>/dev/null || true)
@@ -184,18 +127,18 @@ if [ -z "$DNS" ]; then
 fi
 echo "$DNS"
 ''',
-                    returnStdout: true
-                ).trim()
+                            returnStdout: true
+                        ).trim()
 
-                echo "ALB_DNS resolved to: ${env.ALB_DNS}"
+                        echo "ALB_DNS resolved to: ${env.ALB_DNS}"
+                    }
+                }
             }
         }
-    }
-}
 
-stage('Health Check') {
-    steps {
-        sh '''#!/bin/bash
+        stage('Health Check via ALB') {
+            steps {
+                sh '''#!/bin/bash
 set -euxo pipefail
 for i in $(seq 1 18); do
   if curl -fsS http://${ALB_DNS} > /dev/null; then
@@ -208,19 +151,19 @@ done
 echo "ERROR: Application health check through ALB failed"
 exit 1
 '''
+            }
+        }
     }
- }
-}
+
     post {
         always {
             sh 'docker logout || true'
         }
         success {
-            echo "Build, infra apply, and deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} on ${EC2_HOST}"
+            echo "Build, infra apply, and deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} via ${ALB_DNS}"
         }
         failure {
-            echo 'Pipeline failed. Check Terraform, AWS credentials, SSH access, deploy script, or app health.'
+            echo 'Pipeline failed. Check Docker build/push, Terraform apply, ALB health, or instance bootstrap.'
         }
     }
 }
-
