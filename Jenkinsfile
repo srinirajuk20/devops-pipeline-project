@@ -166,24 +166,50 @@ bash ./scripts/deploy_to_ec2.sh ${EC2_HOST} ${IMAGE_NAME} ${IMAGE_TAG}
             }
         }
 
-        stage('Health Check') {
-            steps {
-                sh '''#!/bin/bash
-set -euxo pipefail
-for i in $(seq 1 12); do
-  if curl -fsS http://${EC2_HOST}:80 > /dev/null; then
-    echo "Application is healthy"
-    exit 0
-  fi
-  echo "Health check failed, retrying in 5s..."
-  sleep 5
-done
-echo "ERROR: Application health check failed"
-exit 1
-'''
+stage('Get ALB DNS') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-jenkins-creds'
+        ]]) {
+            script {
+                env.ALB_DNS = sh(
+                    script: '''#!/bin/bash
+set -euo pipefail
+cd ${TERRAFORM_DIR}
+DNS=$(terraform output -raw alb_dns_name 2>/dev/null || true)
+if [ -z "$DNS" ]; then
+  echo "ERROR: alb_dns_name output is empty"
+  exit 1
+fi
+echo "$DNS"
+''',
+                    returnStdout: true
+                ).trim()
+
+                echo "ALB_DNS resolved to: ${env.ALB_DNS}"
             }
         }
     }
+}
+
+stage('Health Check') {
+    steps {
+        sh '''#!/bin/bash
+set -euxo pipefail
+for i in $(seq 1 18); do
+  if curl -fsS http://${ALB_DNS} > /dev/null; then
+    echo "Application is healthy through ALB"
+    exit 0
+  fi
+  echo "Health check failed, retrying in 10s..."
+  sleep 10
+done
+echo "ERROR: Application health check through ALB failed"
+exit 1
+'''
+    }
+}
 
     post {
         always {
