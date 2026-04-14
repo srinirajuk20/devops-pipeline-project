@@ -209,8 +209,8 @@ echo "ERROR: Application health check through ALB failed"
 exit 1
 '''
     }
+ }
 }
-
     post {
         always {
             sh 'docker logout || true'
@@ -223,4 +223,4 @@ exit 1
         }
     }
 }
-}
+
