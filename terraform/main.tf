@@ -1,7 +1,3 @@
-module "security_group" {
-  source      = "./modules/security-group"
-  environment = var.environment
-}
 
 module "ec2" {
   source            = "./modules/ec2"
@@ -19,29 +15,10 @@ module "s3" {
   create_bucket = var.environment == "prod"
 }
 
-resource "aws_security_group" "alb_sg" {
-  name        = "alb-sg-${var.environment}"
-  description = "Allow HTTP to ALB"
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name        = "alb-sg-${var.environment}"
-    Environment = var.environment
-    Project     = "devops-pipeline-project"
-  }
+module "security_group" {
+  source                = "./modules/security-group"
+  environment           = var.environment
+  alb_security_group_id = aws_security_group.alb_sg.id
 }
 
 data "aws_subnets" "default" {
@@ -62,6 +39,31 @@ resource "aws_lb" "app_alb" {
     Name        = "${var.alb_name}-${var.environment}"
     Environment = var.environment
     Project     = "devops-pipeline-project"
+  }
+}
+
+resource "aws_security_group" "alb_sg" {
+  name        = "alb-sg-${var.environment}"
+  description = "Allow HTTP to ALB"
+
+  ingress {
+    description = "Allow HTTP from internet"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "alb-sg-${var.environment}"
+    Environment = var.environment
   }
 }
 
