@@ -46,6 +46,7 @@ module "security_group" {
   source                = "./modules/security-group"
   environment           = var.environment
   alb_security_group_id = aws_security_group.alb_sg.id
+  ssh_allowed_cidr      = var.ssh_allowed_cidr
 }
 
 ########################################
@@ -218,5 +219,22 @@ resource "aws_autoscaling_group" "app_asg" {
     key                 = "Project"
     value               = "devops-pipeline-project"
     propagate_at_launch = true
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "high_cpu_asg" {
+  alarm_name          = "high-cpu-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 70
+  alarm_description   = "Alarm when EC2 CPU exceeds 70%"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app_asg.name
   }
 }

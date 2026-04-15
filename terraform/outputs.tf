@@ -18,3 +18,7 @@ output "bucket_name" {
 output "bucket_arn" {
   value = module.s3.bucket_arn
 }
+
+output "cloudwatch_alarm_name" {
+  value = aws_cloudwatch_metric_alarm.high_cpu_asg.alarm_name
+}

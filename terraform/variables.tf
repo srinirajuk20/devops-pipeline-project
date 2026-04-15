@@ -47,3 +47,9 @@ variable "image_name" {
   type    = string
   default = "rajugsk20/devops-flask-app"
 }
+
+variable "ssh_allowed_cidr" {
+  description = "CIDR allowed for SSH access"
+  type        = string
+  default     = "0.0.0.0/0"
+}
