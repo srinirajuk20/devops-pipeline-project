@@ -46,7 +46,7 @@ module "security_group" {
   source                = "./modules/security-group"
   environment           = var.environment
   alb_security_group_id = aws_security_group.alb_sg.id
-  ssh_allowed_cidr      = var.ssh_allowed_cidr
+#  ssh_allowed_cidr      = var.ssh_allowed_cidr
 }
 
 ########################################
@@ -131,6 +131,10 @@ resource "aws_launch_template" "app_lt" {
   key_name      = var.key_name
 
   vpc_security_group_ids = [module.security_group.security_group_id]
+
+iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_profile.name
+  }
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
@@ -238,3 +242,29 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu_asg" {
     AutoScalingGroupName = aws_autoscaling_group.app_asg.name
   }
 }
+
+resource "aws_iam_role" "ec2_ssm_role" {
+  name = "ec2-ssm-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.ec2_ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2-profile-${var.environment}"
+  role = aws_iam_role.ec2_ssm_role.name
+}
+

@@ -7,6 +7,6 @@ variable "alb_security_group_id" {
   default = null
 }
 
-variable "ssh_allowed_cidr" {
-  type = string
-}
+#variable "ssh_allowed_cidr" {
+#  type = string
+#}
