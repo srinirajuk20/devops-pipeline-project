@@ -104,8 +104,7 @@ terraform validate
 set -euxo pipefail
 cd ${TERRAFORM_DIR}
 terraform apply -auto-approve
-  -var="image_name=${IMAGE_NAME}" \
-  -var="image_tag=${IMAGE_TAG}"
+  -var="image_name=${IMAGE_NAME}" -var="image_tag=${IMAGE_TAG}"
 '''
                 }
             }
