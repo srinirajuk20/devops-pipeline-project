@@ -53,3 +53,8 @@ variable "ssh_allowed_cidr" {
   type        = string
   default     = "0.0.0.0/0"
 }
+
+variable "image_tag" {
+  type    = string
+  default = "latest"
+}
