@@ -213,6 +213,15 @@ resource "aws_autoscaling_group" "app_asg" {
     propagate_at_launch = true
   }
 
+instance_refresh {
+    strategy = "Rolling"
+
+    preferences {
+      min_healthy_percentage = 50
+      instance_warmup        = 60
+    }
+  }
+
   tag {
     key                 = "Environment"
     value               = var.environment
