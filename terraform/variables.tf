@@ -30,12 +30,12 @@ variable "alb_name" {
 
 variable "desired_capacity" {
   type    = number
-  default = 1
+  default = 2 
 }
 
 variable "min_size" {
   type    = number
-  default = 1
+  default = 2
 }
 
 variable "max_size" {
