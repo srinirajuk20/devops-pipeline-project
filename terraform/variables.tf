@@ -44,8 +44,8 @@ variable "max_size" {
 }
 
 variable "image_name" {
-  type    = string
-  default = "rajugsk20/devops-flask-app"
+# type    = string
+# default = "rajugsk20/devops-flask-app"
 }
 
 variable "ssh_allowed_cidr" {
@@ -55,6 +55,6 @@ variable "ssh_allowed_cidr" {
 }
 
 variable "image_tag" {
-  type    = string
-  default = "latest"
+#  type    = string
+#  default = "latest"
 }

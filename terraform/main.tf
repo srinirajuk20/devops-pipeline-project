@@ -148,14 +148,16 @@ iam_instance_profile {
 
               systemctl enable nginx
               systemctl start nginx
-
+        
+              docker stop flask-app || true
+              docker rm flask-app || true
+              
               docker pull ${var.image_name}:${var.image_tag}
-              docker rm -f flask-app || true
 
               docker run -d \
 	             --name flask-app \
 	             --restart unless-stopped \
-	              -p 5000:5000 \
+	              -p 80:5000 \
 	               ${var.image_name}:${var.image_tag}
 
               tee /etc/nginx/sites-available/default > /dev/null <<'EONGINX'
