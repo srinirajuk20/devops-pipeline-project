@@ -146,9 +146,9 @@ iam_instance_profile {
               systemctl enable docker
               systemctl start docker
 
-              systemctl enable nginx
-              systemctl start nginx
-        
+              sudo systemctl stop nginx || true
+              sudo systemctl disable nginx || true
+              
               docker stop flask-app || true
               docker rm flask-app || true
               
