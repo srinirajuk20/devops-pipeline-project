@@ -10,7 +10,15 @@ data "aws_subnets" "default" {
 }
 
 ########################################
-# ALB Security Group (Public)
+# Locals
+########################################
+
+locals {
+  active_target_group_arn = var.active_color == "blue" ? aws_lb_target_group.blue.arn : aws_lb_target_group.green.arn
+}
+
+########################################
+# ALB Security Group
 ########################################
 
 resource "aws_security_group" "alb_sg" {
@@ -39,18 +47,17 @@ resource "aws_security_group" "alb_sg" {
 }
 
 ########################################
-# EC2 Security Group (Module)
+# EC2 Security Group
 ########################################
 
 module "security_group" {
   source                = "./modules/security-group"
   environment           = var.environment
   alb_security_group_id = aws_security_group.alb_sg.id
-#  ssh_allowed_cidr      = var.ssh_allowed_cidr
 }
 
 ########################################
-# S3 Module (Optional)
+# Optional S3 Module
 ########################################
 
 module "s3" {
@@ -61,7 +68,7 @@ module "s3" {
 }
 
 ########################################
-# Application Load Balancer
+# ALB
 ########################################
 
 resource "aws_lb" "app_alb" {
@@ -79,11 +86,11 @@ resource "aws_lb" "app_alb" {
 }
 
 ########################################
-# Target Group
+# Target Groups
 ########################################
 
-resource "aws_lb_target_group" "app_tg" {
-  name     = "app-tg-${var.environment}"
+resource "aws_lb_target_group" "blue" {
+  name     = "app-blue-${var.environment}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = module.security_group.vpc_id
@@ -99,7 +106,30 @@ resource "aws_lb_target_group" "app_tg" {
   }
 
   tags = {
-    Name        = "app-tg-${var.environment}"
+    Name        = "app-blue-${var.environment}"
+    Environment = var.environment
+    Project     = "devops-pipeline-project"
+  }
+}
+
+resource "aws_lb_target_group" "green" {
+  name     = "app-green-${var.environment}"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = module.security_group.vpc_id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name        = "app-green-${var.environment}"
     Environment = var.environment
     Project     = "devops-pipeline-project"
   }
@@ -116,143 +146,13 @@ resource "aws_lb_listener" "http" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app_tg.arn
+    target_group_arn = local.active_target_group_arn
   }
 }
 
 ########################################
-# Launch Template (Custom AMI)
+# IAM for SSM
 ########################################
-
-resource "aws_launch_template" "app_lt" {
-  name_prefix   = "app-lt-${var.environment}-"
-  image_id      = var.ami_id
-  instance_type = var.instance_type
-  key_name      = var.key_name
-
-  vpc_security_group_ids = [module.security_group.security_group_id]
-
-iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
-  }
-
-  user_data = base64encode(<<-EOF
-              #!/bin/bash
-              set -euxo pipefail
-
-              apt update -y
-              apt install -y nginx
-
-              systemctl enable docker
-              systemctl start docker
-
-              sudo systemctl stop nginx || true
-              sudo systemctl disable nginx || true
-              
-              docker stop flask-app || true
-              docker rm flask-app || true
-              
-              docker pull ${var.image_name}:${var.image_tag}
-
-              docker run -d \
-	             --name flask-app \
-	             --restart unless-stopped \
-	              -p 80:5000 \
-	               ${var.image_name}:${var.image_tag}
-
-              tee /etc/nginx/sites-available/default > /dev/null <<'EONGINX'
-              server {
-                  listen 80;
-                  server_name _;
-
-                  location / {
-                      proxy_pass http://127.0.0.1:5000;
-                      proxy_set_header Host \$host;
-                      proxy_set_header X-Real-IP \$remote_addr;
-                      proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                      proxy_set_header X-Forwarded-Proto \$scheme;
-                  }
-              }
-              EONGINX
-
-              nginx -t
-              systemctl restart nginx
-              EOF
-  )
-
-  tag_specifications {
-    resource_type = "instance"
-
-    tags = {
-      Name        = "asg-app-${var.environment}"
-      Environment = var.environment
-      Project     = "devops-pipeline-project"
-    }
-  }
-}
-
-########################################
-# Auto Scaling Group
-########################################
-
-resource "aws_autoscaling_group" "app_asg" {
-  name                = "app-asg-${var.environment}"
-  desired_capacity    = var.desired_capacity
-  min_size            = var.min_size
-  max_size            = var.max_size
-  vpc_zone_identifier = data.aws_subnets.default.ids
-  target_group_arns   = [aws_lb_target_group.app_tg.arn]
-  health_check_type   = "ELB"
-
-  launch_template {
-    id      = aws_launch_template.app_lt.id
-    version = "$Latest"
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "asg-app-${var.environment}"
-    propagate_at_launch = true
-  }
-
-instance_refresh {
-    strategy = "Rolling"
-
-    preferences {
-      min_healthy_percentage = 50
-      instance_warmup        = 60
-    }
-  }
-
-  tag {
-    key                 = "Environment"
-    value               = var.environment
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "Project"
-    value               = "devops-pipeline-project"
-    propagate_at_launch = true
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "high_cpu_asg" {
-  alarm_name          = "high-cpu-${var.environment}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 70
-  alarm_description   = "Alarm when EC2 CPU exceeds 70%"
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app_asg.name
-  }
-}
 
 resource "aws_iam_role" "ec2_ssm_role" {
   name = "ec2-ssm-role-${var.environment}"
@@ -279,3 +179,159 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_ssm_role.name
 }
 
+########################################
+# Launch Template
+########################################
+
+resource "aws_launch_template" "app_lt" {
+  name_prefix   = "app-lt-${var.environment}-"
+  image_id      = var.ami_id
+  instance_type = var.instance_type
+  key_name      = var.key_name
+
+  vpc_security_group_ids = [module.security_group.security_group_id]
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_profile.name
+  }
+
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              set -euxo pipefail
+
+              systemctl enable docker
+              systemctl start docker
+
+              docker stop flask-app || true
+              docker rm flask-app || true
+
+              docker pull ${var.image_name}:${var.image_tag}
+
+              docker run -d \
+	                      --name flask-app \
+			                      --restart unless-stopped \
+					                      -p 80:5000 \
+							                      ${var.image_name}:${var.image_tag}
+              EOF
+  )
+
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = {
+      Name        = "bg-app-${var.environment}"
+      Environment = var.environment
+      Project     = "devops-pipeline-project"
+    }
+  }
+}
+
+########################################
+# Auto Scaling Groups
+########################################
+
+resource "aws_autoscaling_group" "blue" {
+  name                      = "asg-blue-${var.environment}"
+  desired_capacity          = var.blue_desired_capacity
+  min_size                  = var.blue_min_size
+  max_size                  = var.blue_max_size
+  vpc_zone_identifier       = data.aws_subnets.default.ids
+  target_group_arns         = [aws_lb_target_group.blue.arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 180
+
+  launch_template {
+    id      = aws_launch_template.app_lt.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "asg-blue-${var.environment}"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Project"
+    value               = "devops-pipeline-project"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_group" "green" {
+  name                      = "asg-green-${var.environment}"
+  desired_capacity          = var.green_desired_capacity
+  min_size                  = var.green_min_size
+  max_size                  = var.green_max_size
+  vpc_zone_identifier       = data.aws_subnets.default.ids
+  target_group_arns         = [aws_lb_target_group.green.arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 180
+
+  launch_template {
+    id      = aws_launch_template.app_lt.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "asg-green-${var.environment}"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Project"
+    value               = "devops-pipeline-project"
+    propagate_at_launch = true
+  }
+}
+
+########################################
+# Monitoring
+########################################
+
+resource "aws_cloudwatch_metric_alarm" "high_cpu_blue" {
+  alarm_name          = "high-cpu-blue-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 70
+  alarm_description   = "Alarm when blue ASG CPU exceeds 70%"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.blue.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "high_cpu_green" {
+  alarm_name          = "high-cpu-green-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 70
+  alarm_description   = "Alarm when green ASG CPU exceeds 70%"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.green.name
+  }
+}

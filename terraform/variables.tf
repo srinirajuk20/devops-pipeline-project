@@ -30,7 +30,7 @@ variable "alb_name" {
 
 variable "desired_capacity" {
   type    = number
-  default = 2 
+  default = 2
 }
 
 variable "min_size" {
@@ -40,12 +40,12 @@ variable "min_size" {
 
 variable "max_size" {
   type    = number
-  default = 2
+  default = 3 
 }
 
 variable "image_name" {
-# type    = string
-# default = "rajugsk20/devops-flask-app"
+  # type    = string
+  # default = "rajugsk20/devops-flask-app"
 }
 
 variable "ssh_allowed_cidr" {
@@ -55,6 +55,42 @@ variable "ssh_allowed_cidr" {
 }
 
 variable "image_tag" {
-#  type    = string
-#  default = "latest"
+  #  type    = string
+  #  default = "latest"
+}
+
+variable "active_color" {
+  type    = string
+  default = "blue"
+}
+
+
+variable "blue_desired_capacity" {
+  type    = number
+  default = 2
+}
+
+variable "blue_min_size" {
+  type    = number
+  default = 2
+}
+
+variable "blue_max_size" {
+  type    = number
+  default = 4
+}
+
+variable "green_desired_capacity" {
+  type    = number
+  default = 0
+}
+
+variable "green_min_size" {
+  type    = number
+  default = 0
+}
+
+variable "green_max_size" {
+  type    = number
+  default = 2
 }

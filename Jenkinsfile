@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(
+            name: 'ACTIVE_COLOR',
+            choices: ['blue', 'green'],
+            description: 'Which target group/environment should receive live traffic?'
+        )
+    }
+
     environment {
         IMAGE_NAME         = 'rajugsk20/devops-flask-app'
         IMAGE_TAG          = "${BUILD_NUMBER}"
@@ -20,7 +28,6 @@ pipeline {
                 sh '''#!/bin/bash
 set -euxo pipefail
 docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile app
-docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:${IMAGE_TAG}
 '''
             }
         }
@@ -44,7 +51,6 @@ echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
             steps {
                 sh '''#!/bin/bash
 set -euxo pipefail
-docker push ${IMAGE_NAME}:${IMAGE_TAG}
 docker push ${IMAGE_NAME}:${IMAGE_TAG}
 '''
             }
@@ -103,7 +109,25 @@ terraform validate
                     sh '''#!/bin/bash
 set -euxo pipefail
 cd ${TERRAFORM_DIR}
-terraform apply -auto-approve -var="image_name=${IMAGE_NAME}" -var="image_tag=${IMAGE_TAG}"
+terraform apply -auto-approve \
+  -var="image_name=${IMAGE_NAME}" \
+  -var="image_tag=${IMAGE_TAG}" \
+  -var="active_color=${ACTIVE_COLOR}"
+'''
+                }
+            }
+        }
+
+        stage('Show Terraform Outputs') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-jenkins-creds'
+                ]]) {
+                    sh '''#!/bin/bash
+set -euxo pipefail
+cd ${TERRAFORM_DIR}
+terraform output
 '''
                 }
             }
@@ -120,12 +144,7 @@ terraform apply -auto-approve -var="image_name=${IMAGE_NAME}" -var="image_tag=${
                             script: '''#!/bin/bash
 set -euo pipefail
 cd ${TERRAFORM_DIR}
-DNS=$(terraform output -raw alb_dns_name 2>/dev/null || true)
-if [ -z "$DNS" ]; then
-  echo "ERROR: alb_dns_name output is empty"
-  exit 1
-fi
-echo "$DNS"
+terraform output -raw alb_dns_name
 ''',
                             returnStdout: true
                         ).trim()
@@ -140,7 +159,7 @@ echo "$DNS"
             steps {
                 sh '''#!/bin/bash
 set -euxo pipefail
-for i in $(seq 1 18); do
+for i in $(seq 1 24); do
   if curl -fsS http://${ALB_DNS} > /dev/null; then
     echo "Application is healthy through ALB"
     exit 0
@@ -160,10 +179,10 @@ exit 1
             sh 'docker logout || true'
         }
         success {
-            echo "Build, infra apply, and deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} via ${ALB_DNS}"
+            echo "Blue/Green deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} active on ${ACTIVE_COLOR} via ${ALB_DNS}"
         }
         failure {
-            echo 'Pipeline failed. Check Docker build/push, Terraform apply, ALB health, or instance bootstrap.'
+            echo 'Pipeline failed. Check Docker build/push, Terraform apply, target group health, or ALB health.'
         }
     }
 }
