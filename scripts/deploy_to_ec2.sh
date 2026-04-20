@@ -1,38 +1,49 @@
 #!/bin/bash
+set -euo pipefail
 
-EC2_IP=$1
-IMAGE_NAME=$2
-IMAGE_TAG=$3
+EC2_IP="$1"
+IMAGE_NAME="$2"
+IMAGE_TAG="$3"
+COLOR="${4:-blue}"
 
-echo "Deploying to EC2: $EC2_IP"
+CONTAINER_NAME="flask-app-${COLOR}"
 
-ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << EOF
+echo "Deploying ${IMAGE_NAME}:${IMAGE_TAG} to ${EC2_IP} (${COLOR})"
+
+ssh -o BatchMode=yes -o StrictHostKeyChecking=no "ubuntu@${EC2_IP}" /bin/bash <<EOF
+set -euo pipefail
+
+echo "Connected to \$(hostname)"
 
 echo "Updating packages..."
 sudo apt update -y
 
 echo "Installing Docker if not present..."
 sudo apt install -y docker.io
-sudo systemctl start docker
 sudo systemctl enable docker
+sudo systemctl start docker
 
-echo "Installing Nginx..."
+echo "Installing Nginx if not present..."
 sudo apt install -y nginx
-sudo systemctl start nginx
 sudo systemctl enable nginx
+sudo systemctl start nginx
 
 echo "Stopping old container if exists..."
-sudo docker rm -f flask-app || true
+sudo docker stop ${CONTAINER_NAME} || true
+sudo docker rm ${CONTAINER_NAME} || true
 
-echo "Pulling latest image..."
-sudo docker pull $IMAGE_NAME:$IMAGE_TAG
+echo "Pulling image..."
+sudo docker pull ${IMAGE_NAME}:${IMAGE_TAG}
 
 echo "Running container..."
-sudo docker run -d -p 5000:5000 --name flask-app $IMAGE_NAME:$IMAGE_TAG
+sudo docker run -d \
+  --name ${CONTAINER_NAME} \
+  --restart unless-stopped \
+  -p 5000:5000 \
+  ${IMAGE_NAME}:${IMAGE_TAG}
 
-echo "Configuring Nginx reverse proxy..."
-
-sudo -n tee /etc/nginx/sites-available/default > /dev/null <<'EONGINX'
+echo "Writing Nginx reverse proxy config..."
+sudo tee /etc/nginx/sites-available/default > /dev/null <<'EONGINX'
 server {
     listen 80;
     server_name _;
@@ -47,9 +58,17 @@ server {
 }
 EONGINX
 
+echo "Validating Nginx config..."
+sudo nginx -t
+
 echo "Restarting Nginx..."
 sudo systemctl restart nginx
 
-echo "Deployment completed!"
+echo "Checking local container health..."
+curl -fsS http://127.0.0.1:5000 >/dev/null
 
+echo "Checking local Nginx health..."
+curl -fsS http://127.0.0.1 >/dev/null
+
+echo "Deployment completed successfully for ${CONTAINER_NAME}"
 EOF

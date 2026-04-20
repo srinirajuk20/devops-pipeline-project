@@ -112,7 +112,7 @@ cd ${TERRAFORM_DIR}
 terraform apply -auto-approve \
   -var="image_name=${IMAGE_NAME}" \
   -var="image_tag=${IMAGE_TAG}" \
-  -var="active_color=${ACTIVE_COLOR}"
+  -var="active_color=${params.ACTIVE_COLOR ?: 'blue' }"
 '''
                 }
             }
