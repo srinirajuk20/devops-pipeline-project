@@ -113,7 +113,7 @@ terraform apply -auto-approve \
   -var="image_name=${IMAGE_NAME}" \
   -var="image_tag=${IMAGE_TAG}" \
   -var="active_color=${params.ACTIVE_COLOR}"
-'''
+"""
                 }
             }
         }
