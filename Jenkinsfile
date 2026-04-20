@@ -106,7 +106,7 @@ terraform validate
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-jenkins-creds'
                 ]]) {
-                    sh '''#!/bin/bash
+                    sh '''!/bin/bash
 set -euxo pipefail
 cd ${TERRAFORM_DIR}
 terraform apply -auto-approve \
