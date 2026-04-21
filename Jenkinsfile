@@ -106,12 +106,12 @@ terraform validate
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-jenkins-creds'
                 ]]) {
-                    sh '''!/bin/bash
+                    sh """#!/bin/bash
 set -euxo pipefail
 cd ${TERRAFORM_DIR}
-terraform apply -auto-approve \
-  -var="image_name=${IMAGE_NAME}" \
-  -var="image_tag=${IMAGE_TAG}" \
+terraform apply -auto-approve \\
+  -var="image_name=${IMAGE_NAME}" \\
+  -var="image_tag=${IMAGE_TAG}" \\
   -var="active_color=${params.ACTIVE_COLOR}"
 """
                 }
@@ -179,7 +179,7 @@ exit 1
             sh 'docker logout || true'
         }
         success {
-            echo "Blue/Green deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} active on ${ACTIVE_COLOR} via ${ALB_DNS}"
+            echo "Blue/Green deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} active on ${params.ACTIVE_COLOR} via ${ALB_DNS}"
         }
         failure {
             echo 'Pipeline failed. Check Docker build/push, Terraform apply, target group health, or ALB health.'
