@@ -4,7 +4,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "DevOps Project Running-Test Version-5."
+    return "DevOps Project Running-Test Version-6 for Blue/green Testing."
 
 @app.route("/health")
 def health():
