@@ -94,3 +94,4 @@ variable "green_max_size" {
   type    = number
   default = 0
 }
+
