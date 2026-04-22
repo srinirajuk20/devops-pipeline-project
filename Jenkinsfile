@@ -108,8 +108,8 @@ terraform apply -auto-approve \\
   -var="active_color=blue" \\
   -var="blue_desired_capacity=1" \\
   -var="blue_min_size=1" \\
-  -var="green_desired_capacity=1" \\
-  -var="green_min_size=1"
+  -var="green_desired_capacity=0" \\
+  -var="green_min_size=0"
 """
                 }
             }
