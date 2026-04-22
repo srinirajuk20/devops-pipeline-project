@@ -40,7 +40,7 @@ variable "min_size" {
 
 variable "max_size" {
   type    = number
-  default = 3 
+  default = 3
 }
 
 variable "image_name" {
@@ -72,25 +72,25 @@ variable "blue_desired_capacity" {
 
 variable "blue_min_size" {
   type    = number
-  default = 2
+  default = 1
 }
 
 variable "blue_max_size" {
   type    = number
-  default = 4
+  default = 2
 }
 
 variable "green_desired_capacity" {
   type    = number
-  default = 2
+  default = 0
 }
 
 variable "green_min_size" {
   type    = number
-  default = 2
+  default = 0
 }
 
 variable "green_max_size" {
   type    = number
-  default = 3
+  default = 0
 }

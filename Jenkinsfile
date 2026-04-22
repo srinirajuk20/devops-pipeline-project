@@ -1,14 +1,6 @@
 pipeline {
     agent any
 
-    parameters {
-        choice(
-            name: 'ACTIVE_COLOR',
-            choices: ['blue', 'green'],
-            description: 'Which target group/environment should receive live traffic?'
-        )
-    }
-
     environment {
         IMAGE_NAME         = 'rajugsk20/devops-flask-app'
         IMAGE_TAG          = "${BUILD_NUMBER}"
@@ -100,7 +92,7 @@ terraform validate
             }
         }
 
-        stage('Terraform Apply') {
+        stage('Prepare Green (Blue stays live)') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -109,10 +101,15 @@ terraform validate
                     sh """#!/bin/bash
 set -euxo pipefail
 cd ${TERRAFORM_DIR}
+
 terraform apply -auto-approve \\
   -var="image_name=${IMAGE_NAME}" \\
   -var="image_tag=${IMAGE_TAG}" \\
-  -var="active_color=${params.ACTIVE_COLOR}"
+  -var="active_color=blue" \\
+  -var="blue_desired_capacity=1" \\
+  -var="blue_min_size=1" \\
+  -var="green_desired_capacity=1" \\
+  -var="green_min_size=1"
 """
                 }
             }
@@ -133,6 +130,27 @@ terraform output
             }
         }
 
+        stage('Get Green Target Group ARN') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-jenkins-creds'
+                ]]) {
+                    script {
+                        env.GREEN_TG_ARN = sh(
+                            script: '''#!/bin/bash
+set -euo pipefail
+cd ${TERRAFORM_DIR}
+terraform output -raw green_target_group_arn
+''',
+                            returnStdout: true
+                        ).trim()
+                        echo "GREEN_TG_ARN resolved to: ${env.GREEN_TG_ARN}"
+                    }
+                }
+            }
+        }
+
         stage('Get ALB DNS') {
             steps {
                 withCredentials([[
@@ -148,9 +166,66 @@ terraform output -raw alb_dns_name
 ''',
                             returnStdout: true
                         ).trim()
-
                         echo "ALB_DNS resolved to: ${env.ALB_DNS}"
                     }
+                }
+            }
+        }
+
+        stage('Wait for Green Health') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-jenkins-creds'
+                ]]) {
+                    sh '''#!/bin/bash
+set -euxo pipefail
+
+echo "Waiting for Green target group to become healthy..."
+
+for i in $(seq 1 30); do
+  HEALTHY_COUNT=$(aws elbv2 describe-target-health \
+    --target-group-arn "${GREEN_TG_ARN}" \
+    --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`]' \
+    --output json | python3 -c 'import sys, json; print(len(json.load(sys.stdin)))')
+
+  echo "Healthy Green targets: ${HEALTHY_COUNT}"
+
+  if [ "${HEALTHY_COUNT}" -ge 1 ]; then
+    echo "Green target group is healthy"
+    exit 0
+  fi
+
+  echo "Green not healthy yet, retrying in 20 seconds..."
+  sleep 20
+done
+
+echo "ERROR: Green target group did not become healthy in time"
+exit 1
+'''
+                }
+            }
+        }
+
+        stage('Switch Traffic to Green') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-jenkins-creds'
+                ]]) {
+                    sh """#!/bin/bash
+set -euxo pipefail
+cd ${TERRAFORM_DIR}
+
+terraform apply -auto-approve \\
+  -var="image_name=${IMAGE_NAME}" \\
+  -var="image_tag=${IMAGE_TAG}" \\
+  -var="active_color=green" \\
+  -var="blue_desired_capacity=1" \\
+  -var="blue_min_size=1" \\
+  -var="green_desired_capacity=1" \\
+  -var="green_min_size=1"
+"""
                 }
             }
         }
@@ -164,12 +239,35 @@ for i in $(seq 1 24); do
     echo "Application is healthy through ALB"
     exit 0
   fi
-  echo "Health check failed, retrying in 10s..."
+  echo "ALB health check failed, retrying in 10s..."
   sleep 10
 done
 echo "ERROR: Application health check through ALB failed"
 exit 1
 '''
+            }
+        }
+
+        stage('Scale Down Blue') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-jenkins-creds'
+                ]]) {
+                    sh """#!/bin/bash
+set -euxo pipefail
+cd ${TERRAFORM_DIR}
+
+terraform apply -auto-approve \\
+  -var="image_name=${IMAGE_NAME}" \\
+  -var="image_tag=${IMAGE_TAG}" \\
+  -var="active_color=green" \\
+  -var="blue_desired_capacity=0" \\
+  -var="blue_min_size=0" \\
+  -var="green_desired_capacity=1" \\
+  -var="green_min_size=1"
+"""
+                }
             }
         }
     }
@@ -179,10 +277,10 @@ exit 1
             sh 'docker logout || true'
         }
         success {
-            echo "Blue/Green deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} active on ${params.ACTIVE_COLOR} via ${ALB_DNS}"
+            echo "Blue/Green deployment successful: ${IMAGE_NAME}:${IMAGE_TAG} live on green via ${ALB_DNS}. Blue scaled down."
         }
         failure {
-            echo 'Pipeline failed. Check Docker build/push, Terraform apply, target group health, or ALB health.'
+            echo 'Pipeline failed safely. Blue should still remain live unless the failure happened after traffic switch.'
         }
     }
 }

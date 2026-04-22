@@ -57,6 +57,75 @@ module "security_group" {
 }
 
 ########################################
+# DB Security Group
+########################################
+
+resource "aws_security_group" "db_sg" {
+  name = "db-sg-${var.environment}"
+
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [module.security_group.security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "db-sg-${var.environment}"
+    Environment = var.environment
+  }
+}
+
+########################################
+# DB Subnet Group
+########################################
+
+resource "aws_db_subnet_group" "db_subnet" {
+  name       = "db-subnet-${var.environment}"
+  subnet_ids = data.aws_subnets.default.ids
+
+  tags = {
+    Name = "db-subnet-${var.environment}"
+  }
+}
+
+########################################
+# RDS Instance
+########################################
+
+resource "aws_db_instance" "app_db" {
+  identifier = "app-db-${var.environment}"
+
+  engine         = "postgres"
+  engine_version = "15"
+  instance_class = "db.t3.micro"
+
+  allocated_storage = 20
+
+  db_name  = "appdb"
+  username = "appuser"
+  password = "StrongPassword123!" # later → secrets manager
+
+  publicly_accessible = false
+
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  db_subnet_group_name   = aws_db_subnet_group.db_subnet.name
+
+  skip_final_snapshot = true
+
+  tags = {
+    Name = "app-db-${var.environment}"
+  }
+}
+
+########################################
 # Optional S3 Module
 ########################################
 
@@ -208,10 +277,14 @@ resource "aws_launch_template" "app_lt" {
               docker pull ${var.image_name}:${var.image_tag}
 
               docker run -d \
-	                      --name flask-app \
-			                      --restart unless-stopped \
-					                      -p 80:5000 \
-							                      ${var.image_name}:${var.image_tag}
+	        --name flask-app \
+		--restart unless-stopped \
+		-p 80:5000 \
+		-e DB_HOST=${aws_db_instance.app_db.address} \
+		-e DB_NAME=appdb \
+		-e DB_USER=appuser \
+		-e DB_PASSWORD=StrongPassword123! \
+		${var.image_name}:${var.image_tag}
               EOF
   )
 

@@ -37,3 +37,7 @@ output "bucket_name" {
 output "bucket_arn" {
   value = module.s3.bucket_arn
 }
+
+output "db_endpoint" {
+  value = aws_db_instance.app_db.address
+}
