@@ -261,11 +261,13 @@ cd ${TERRAFORM_DIR}
 terraform apply -auto-approve \\
   -var="image_name=${IMAGE_NAME}" \\
   -var="image_tag=${IMAGE_TAG}" \\
-  -var="active_color=green" \\
-  -var="blue_desired_capacity=0" \\
-  -var="blue_min_size=0" \\
-  -var="green_desired_capacity=1" \\
-  -var="green_min_size=1"
+  -var="active_color=blue" \\
+  -var="blue_desired_capacity=1" \\
+  -var="blue_min_size=1" \\
+  -var="blue_max_size=2" \\
+  -var="green_desired_capacity=0" \\
+  -var="green_min_size=0" \\
+  -var="green_max_size=0" 
 """
                 }
             }
