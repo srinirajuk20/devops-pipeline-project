@@ -267,7 +267,7 @@ terraform apply -auto-approve \\
   -var="blue_max_size=2" \\
   -var="green_desired_capacity=0" \\
   -var="green_min_size=0" \\
-  -var="green_max_size=0" 
+  -var="green_max_size=2" 
 """
                 }
             }
