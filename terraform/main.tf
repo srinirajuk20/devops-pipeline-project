@@ -306,7 +306,6 @@ resource "aws_autoscaling_group" "app_asg" {
       skip_matching          = true
     }
 
-    triggers = ["launch_template"]
   }
 
   tag {
