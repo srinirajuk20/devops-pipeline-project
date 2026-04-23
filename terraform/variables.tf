@@ -1,26 +1,13 @@
+variable "aws_region" {
+  type = string
+}
+
 variable "environment" {
-  description = "Deployment environment"
-  type        = string
-}
-
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-}
-
-variable "key_name" {
-  description = "AWS EC2 key pair name"
-  type        = string
+  type = string
 }
 
 variable "bucket_name" {
-  description = "S3 bucket name"
-  type        = string
-}
-
-variable "ami_id" {
-  description = "Custom AMI ID for EC2"
-  type        = string
+  type = string
 }
 
 variable "alb_name" {
@@ -28,70 +15,54 @@ variable "alb_name" {
   default = "devops-alb"
 }
 
+variable "instance_type" {
+  type    = string
+  default = "t3.micro"
+}
+
+variable "key_name" {
+  type = string
+}
+
+variable "ami_id" {
+  type = string
+}
+
+variable "image_name" {
+  type    = string
+  default = "rajugsk20/devops-flask-app"
+}
+
+variable "image_tag" {
+  type    = string
+  default = "latest"
+}
+
 variable "desired_capacity" {
   type    = number
-  default = 2
+  default = 1
 }
 
 variable "min_size" {
   type    = number
-  default = 2
+  default = 1
 }
 
 variable "max_size" {
   type    = number
-  default = 3
+  default = 2
 }
 
-variable "image_name" {
-  # type    = string
-  # default = "rajugsk20/devops-flask-app"
-}
-
-variable "ssh_allowed_cidr" {
-  description = "CIDR allowed for SSH access"
-  type        = string
-  default     = "0.0.0.0/0"
-}
-
-variable "image_tag" {
-  #  type    = string
-  #  default = "latest"
-}
-
-variable "active_color" {
+variable "db_name" {
   type    = string
-  default = "blue"
+  default = "appdb"
 }
 
-
-variable "blue_desired_capacity" {
-  type    = number
-  default = 2
+variable "db_user" {
+  type    = string
+  default = "appuser"
 }
 
-variable "blue_min_size" {
-  type    = number
-  default = 1
+variable "db_password" {
+  type = string
 }
-
-variable "blue_max_size" {
-  type    = number
-  default = 2
-}
-
-variable "green_desired_capacity" {
-  type    = number
-  default = 1
-}
-
-variable "green_min_size" {
-  type    = number
-  default = 1
-}
-
-variable "green_max_size" {
-  type    = number
-  default = 2
-}
-

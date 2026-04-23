@@ -10,6 +10,14 @@ data "aws_subnets" "default" {
 }
 
 ########################################
+# Locals
+########################################
+
+locals {
+  active_target_group_arn = var.active_color == "blue" ? aws_lb_target_group.blue.arn : aws_lb_target_group.green.arn
+}
+
+########################################
 # ALB Security Group
 ########################################
 
@@ -49,23 +57,11 @@ module "security_group" {
 }
 
 ########################################
-# Optional S3 Module
-########################################
-
-module "s3" {
-  source        = "./modules/s3"
-  bucket_name   = var.bucket_name
-  environment   = var.environment
-  create_bucket = var.environment == "prod"
-}
-
-########################################
-# Database Security Group
+# DB Security Group
 ########################################
 
 resource "aws_security_group" "db_sg" {
-  name        = "db-sg-${var.environment}"
-  description = "Allow PostgreSQL from app instances"
+  name = "db-sg-${var.environment}"
 
   ingress {
     from_port       = 5432
@@ -84,7 +80,6 @@ resource "aws_security_group" "db_sg" {
   tags = {
     Name        = "db-sg-${var.environment}"
     Environment = var.environment
-    Project     = "devops-pipeline-project"
   }
 }
 
@@ -97,44 +92,48 @@ resource "aws_db_subnet_group" "db_subnet" {
   subnet_ids = data.aws_subnets.default.ids
 
   tags = {
-    Name        = "db-subnet-${var.environment}"
-    Environment = var.environment
-    Project     = "devops-pipeline-project"
+    Name = "db-subnet-${var.environment}"
   }
 }
 
 ########################################
-# RDS PostgreSQL
+# RDS Instance
 ########################################
 
 resource "aws_db_instance" "app_db" {
   identifier = "app-db-${var.environment}"
 
   engine         = "postgres"
-  engine_version = "15.8"
+  engine_version = "15"
   instance_class = "db.t3.micro"
 
   allocated_storage = 20
-  storage_type      = "gp2"
 
-  db_name  = var.db_name
-  username = var.db_user
-  password = var.db_password
+  db_name  = "appdb"
+  username = "appuser"
+  password = "StrongPassword123!" # later → secrets manager
 
-  publicly_accessible    = false
-  skip_final_snapshot    = true
-  deletion_protection    = false
-  multi_az               = false
-  backup_retention_period = 0
+  publicly_accessible = false
 
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.db_subnet.name
 
+  skip_final_snapshot = true
+
   tags = {
-    Name        = "app-db-${var.environment}"
-    Environment = var.environment
-    Project     = "devops-pipeline-project"
+    Name = "app-db-${var.environment}"
   }
+}
+
+########################################
+# Optional S3 Module
+########################################
+
+module "s3" {
+  source        = "./modules/s3"
+  bucket_name   = var.bucket_name
+  environment   = var.environment
+  create_bucket = var.environment == "prod"
 }
 
 ########################################
@@ -156,17 +155,17 @@ resource "aws_lb" "app_alb" {
 }
 
 ########################################
-# Target Group
+# Target Groups
 ########################################
 
-resource "aws_lb_target_group" "app_tg" {
-  name     = "app-tg-${var.environment}"
+resource "aws_lb_target_group" "blue" {
+  name     = "app-blue-${var.environment}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = module.security_group.vpc_id
 
   health_check {
-    path                = "/health"
+    path                = "/"
     protocol            = "HTTP"
     matcher             = "200"
     interval            = 30
@@ -176,7 +175,30 @@ resource "aws_lb_target_group" "app_tg" {
   }
 
   tags = {
-    Name        = "app-tg-${var.environment}"
+    Name        = "app-blue-${var.environment}"
+    Environment = var.environment
+    Project     = "devops-pipeline-project"
+  }
+}
+
+resource "aws_lb_target_group" "green" {
+  name     = "app-green-${var.environment}"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = module.security_group.vpc_id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name        = "app-green-${var.environment}"
     Environment = var.environment
     Project     = "devops-pipeline-project"
   }
@@ -193,7 +215,7 @@ resource "aws_lb_listener" "http" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app_tg.arn
+    target_group_arn = local.active_target_group_arn
   }
 }
 
@@ -255,14 +277,14 @@ resource "aws_launch_template" "app_lt" {
               docker pull ${var.image_name}:${var.image_tag}
 
               docker run -d \
-	                      --name flask-app \
-			                      --restart unless-stopped \
-					                      -p 80:5000 \
-							                      -e DB_HOST=${aws_db_instance.app_db.address} \
-									                      -e DB_NAME=${var.db_name} \
-											                      -e DB_USER=${var.db_user} \
-													                      -e DB_PASSWORD=${var.db_password} \
-															                      ${var.image_name}:${var.image_tag}
+	        --name flask-app \
+		--restart unless-stopped \
+		-p 80:5000 \
+		-e DB_HOST=${aws_db_instance.app_db.address} \
+		-e DB_NAME=appdb \
+		-e DB_USER=appuser \
+		-e DB_PASSWORD=StrongPassword123! \
+		${var.image_name}:${var.image_tag}
               EOF
   )
 
@@ -270,7 +292,7 @@ resource "aws_launch_template" "app_lt" {
     resource_type = "instance"
 
     tags = {
-      Name        = "app-instance-${var.environment}"
+      Name        = "bg-app-${var.environment}"
       Environment = var.environment
       Project     = "devops-pipeline-project"
     }
@@ -278,16 +300,16 @@ resource "aws_launch_template" "app_lt" {
 }
 
 ########################################
-# Auto Scaling Group
+# Auto Scaling Groups
 ########################################
 
-resource "aws_autoscaling_group" "app_asg" {
-  name                      = "app-asg-${var.environment}"
-  desired_capacity          = var.desired_capacity
-  min_size                  = var.min_size
-  max_size                  = var.max_size
+resource "aws_autoscaling_group" "blue" {
+  name                      = "asg-blue-${var.environment}"
+  desired_capacity          = var.blue_desired_capacity
+  min_size                  = var.blue_min_size
+  max_size                  = var.blue_max_size
   vpc_zone_identifier       = data.aws_subnets.default.ids
-  target_group_arns         = [aws_lb_target_group.app_tg.arn]
+  target_group_arns         = [aws_lb_target_group.blue.arn]
   health_check_type         = "ELB"
   health_check_grace_period = 180
 
@@ -296,22 +318,43 @@ resource "aws_autoscaling_group" "app_asg" {
     version = "$Latest"
   }
 
-  instance_refresh {
-    strategy = "Rolling"
+  tag {
+    key                 = "Name"
+    value               = "asg-blue-${var.environment}"
+    propagate_at_launch = true
+  }
 
-    preferences {
-      min_healthy_percentage = 100
-      instance_warmup        = 180
-      auto_rollback          = true
-      skip_matching          = true
-    }
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
+  }
 
-    triggers = ["launch_template"]
+  tag {
+    key                 = "Project"
+    value               = "devops-pipeline-project"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_group" "green" {
+  name                      = "asg-green-${var.environment}"
+  desired_capacity          = var.green_desired_capacity
+  min_size                  = var.green_min_size
+  max_size                  = var.green_max_size
+  vpc_zone_identifier       = data.aws_subnets.default.ids
+  target_group_arns         = [aws_lb_target_group.green.arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 180
+
+  launch_template {
+    id      = aws_launch_template.app_lt.id
+    version = "$Latest"
   }
 
   tag {
     key                 = "Name"
-    value               = "app-asg-${var.environment}"
+    value               = "asg-green-${var.environment}"
     propagate_at_launch = true
   }
 
@@ -329,11 +372,11 @@ resource "aws_autoscaling_group" "app_asg" {
 }
 
 ########################################
-# CloudWatch Alarm
+# Monitoring
 ########################################
 
-resource "aws_cloudwatch_metric_alarm" "high_cpu_asg" {
-  alarm_name          = "high-cpu-${var.environment}"
+resource "aws_cloudwatch_metric_alarm" "high_cpu_blue" {
+  alarm_name          = "high-cpu-blue-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "CPUUtilization"
@@ -341,10 +384,27 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu_asg" {
   period              = 300
   statistic           = "Average"
   threshold           = 70
-  alarm_description   = "Alarm when app ASG CPU exceeds 70%"
+  alarm_description   = "Alarm when blue ASG CPU exceeds 70%"
   treat_missing_data  = "notBreaching"
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app_asg.name
+    AutoScalingGroupName = aws_autoscaling_group.blue.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "high_cpu_green" {
+  alarm_name          = "high-cpu-green-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 70
+  alarm_description   = "Alarm when green ASG CPU exceeds 70%"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.green.name
   }
 }
