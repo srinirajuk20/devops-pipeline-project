@@ -82,16 +82,16 @@ variable "blue_max_size" {
 
 variable "green_desired_capacity" {
   type    = number
-  default = 0
+  default = 1
 }
 
 variable "green_min_size" {
   type    = number
-  default = 0
+  default = 1
 }
 
 variable "green_max_size" {
   type    = number
-  default = 0
+  default = 2
 }
 
