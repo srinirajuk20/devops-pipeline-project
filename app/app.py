@@ -20,9 +20,9 @@ def db_test():
             database=os.environ.get("DB_NAME"),
             user=os.environ.get("DB_USER"),
             password=os.environ.get("DB_PASSWORD")
-                                                                                            )
-            conn.close()
-            return "Database connection successful!"
+        )
+        conn.close()
+        return "Database connection successful!"
     except Exception as e:
         return f"Database connection failed: {e}"
 
