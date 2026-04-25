@@ -165,14 +165,14 @@ resource "aws_lb_target_group" "app_tg" {
   vpc_id   = module.security_group.vpc_id
 
   health_check {
-    path                = "/health"
-    protocol            = "HTTP"
-    matcher             = "200"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-  }
+  enabled             = true
+  path                = "/health"
+  matcher             = "200"
+  interval            = 30
+  timeout             = 5
+  healthy_threshold   = 2
+  unhealthy_threshold = 3
+}
 
   tags = {
     Name        = "app-tg-${var.environment}"
@@ -254,15 +254,15 @@ resource "aws_launch_template" "app_lt" {
               docker pull ${var.image_name}:${var.image_tag}
 
               docker run -d \
-	                      --name flask-app \
-			                      --restart unless-stopped \
-					                      -p 80:5000 \
-							                      -e DB_HOST=${aws_db_instance.app_db.address} \
-									                      -e DB_NAME=${var.db_name} \
-											                      -e DB_USER=${var.db_user} \
-													                      -e DB_PASSWORD=${var.db_password} \
-															                      ${var.image_name}:${var.image_tag}
-              EOF
+                --name flask-app \
+                --restart unless-stopped \
+                -p 80:8000 \
+                -e DB_HOST=${aws_db_instance.app_db.address} \
+                -e DB_NAME=${var.db_name} \
+                -e DB_USER=${var.db_user} \
+                -e DB_PASSWORD=${var.db_password} \
+                ${var.image_name}:${var.image_tag}
+  EOF
   )
 
   tag_specifications {
@@ -273,7 +273,9 @@ resource "aws_launch_template" "app_lt" {
       Environment = var.environment
       Project     = "devops-pipeline-project"
     }
-  }
+  
+}
+
 }
 
 ########################################

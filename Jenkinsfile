@@ -19,7 +19,7 @@ pipeline {
             steps {
                 sh '''#!/bin/bash
 set -euxo pipefail
-docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile app
+docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
 '''
             }
         }
@@ -152,7 +152,7 @@ terraform output -raw alb_dns_name
                 sh '''#!/bin/bash
 set -euxo pipefail
 for i in $(seq 1 24); do
-  if curl -fsS http://${ALB_DNS} > /dev/null; then
+  curl -fsS http://${ALB_DNS}/health > /dev/null; then
     echo "Application is healthy through ALB"
     exit 0
   fi
@@ -165,24 +165,23 @@ exit 1
             }
         }
 
-        stage('Database Check via ALB') {
-            steps {
-                sh '''#!/bin/bash
+        stage('Health Check via ALB') {
+    steps {
+        sh '''#!/bin/bash
 set -euxo pipefail
-for i in $(seq 1 20); do
-  if curl -fsS http://${ALB_DNS}/db > /dev/null; then
-    echo "Database connectivity is healthy through ALB"
+for i in $(seq 1 24); do
+  if curl -fsS http://${ALB_DNS}/health > /dev/null; then
+    echo "Application health is healthy through ALB"
     exit 0
   fi
-  echo "Database check failed, retrying in 15s..."
-  sleep 15
+  echo "Health check failed, retrying in 10s..."
+  sleep 10
 done
-echo "ERROR: Database connectivity check failed"
+echo "ERROR: Application health check through ALB failed"
 exit 1
 '''
-            }
-        }
     }
+}
 
     post {
         always {
