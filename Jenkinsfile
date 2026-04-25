@@ -14,6 +14,7 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '5'))
     }
 
+
     stages {
         stage('Build Docker Image') {
             steps {
@@ -147,23 +148,7 @@ terraform output -raw alb_dns_name
             }
         }
 
-        stage('Health Check via ALB') {
-            steps {
-                sh '''#!/bin/bash
-set -euxo pipefail
-for i in $(seq 1 24); do
-  curl -fsS http://${ALB_DNS}/health > /dev/null; then
-    echo "Application is healthy through ALB"
-    exit 0
-  fi
-  echo "Health check failed, retrying in 10s..."
-  sleep 10
-done
-echo "ERROR: Application health check through ALB failed"
-exit 1
-'''
-            }
-        }
+        
 
         stage('Health Check via ALB') {
     steps {
@@ -182,6 +167,7 @@ exit 1
 '''
     }
 }
+    }
 
     post {
         always {
@@ -194,4 +180,5 @@ exit 1
             echo 'Pipeline failed. Check Docker build/push, Terraform apply, ALB health, or database connectivity.'
         }
     }
+    
 }
