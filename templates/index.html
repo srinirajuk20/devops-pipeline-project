@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Employee Payroll System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="page">
+    <section class="card form-card">
+      <div class="topbar">
+        <div>
+          <h1>Employee Payroll System</h1>
+          <p class="muted">SQLite database enabled. NI number removed. RBAC access control enabled.</p>
+        </div>
+        <div class="userbox">
+          <strong>{{ current_user.username }}</strong><br>
+          <span>{{ current_user.role }}</span><br>
+          <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a class="secondary" href="{{ url_for('index') }}">Home</a>
+        <a class="secondary" href="{{ url_for('employee_search') }}">Search employees</a>
+        {% if current_user.role == 'admin' %}<a class="secondary" href="{{ url_for('users') }}">Manage users</a>{% endif %}
+      </nav>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
+        {% endif %}
+      {% endwith %}
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+      {% if employee %}
+        <h2>Employee #{{ employee.id }}: {{ employee.employee_name }}</h2>
+        <dl class="payslip">
+          <dt>Address</dt><dd>{{ employee.address or '-' }}</dd>
+          <dt>Employer</dt><dd>{{ employee.employer or '-' }}</dd>
+          <dt>Job Title</dt><dd>{{ employee.job_title or '-' }}</dd>
+          <dt>Department</dt><dd>{{ employee.department or '-' }}</dd>
+          <dt>Email</dt><dd>{{ employee.email or '-' }}</dd>
+          <dt>Phone</dt><dd>{{ employee.phone or '-' }}</dd>
+        </dl>
+
+        {% if current_user.role in ['admin', 'hr', 'finance'] %}
+          <h2>Calculate payroll</h2>
+          <form method="post" action="{{ url_for('calculate', employee_id=employee.id) }}">
+            <div class="grid">
+              <label>Hours Worked
+                <input name="hours_worked" type="number" min="0" step="0.01" required value="{{ form.get('hours_worked', '') }}">
+              </label>
+              <label>Hourly Rate
+                <input name="hourly_rate" type="number" min="0" step="0.01" required value="{{ form.get('hourly_rate', '') }}">
+              </label>
+            </div>
+            <div class="actions"><button type="submit">Calculate & Save Payroll</button></div>
+          </form>
+        {% else %}
+          <p class="muted">Viewer role can search/read employees, but cannot calculate payroll.</p>
+        {% endif %}
+      {% else %}
+        {% if current_user.role in ['admin', 'hr'] %}
+          <h2>Add employee</h2>
+          <form method="post" action="{{ url_for('add_employee') }}">
+            <div class="grid">
+              <label>Name <input name="employee_name" required value="{{ form.get('employee_name', '') }}" autocomplete="name"></label>
+              <label>Address <input name="address" value="{{ form.get('address', '') }}" autocomplete="street-address"></label>
+              <label>Employer <input name="employer" value="{{ form.get('employer', '') }}"></label>
+              <label>Job Title <input name="job_title" value="{{ form.get('job_title', '') }}"></label>
+              <label>Department <input name="department" value="{{ form.get('department', '') }}"></label>
+              <label>Email <input name="email" type="email" value="{{ form.get('email', '') }}"></label>
+              <label>Phone <input name="phone" value="{{ form.get('phone', '') }}"></label>
+            </div>
+            <div class="actions"><button type="submit">Save Employee</button></div>
+          </form>
+        {% else %}
+          <h2>Read-only access</h2>
+          <p class="muted">Your role can search employees. Admin/HR can add employees.</p>
+        {% endif %}
+      {% endif %}
+    </section>
+
+    <section class="card payslip-card">
+      <h2>Payslip</h2>
+      {% if result %}
+        <dl class="payslip">
+          <dt>Date</dt><dd>{{ result.payslip_date }}</dd>
+          <dt>Name</dt><dd>{{ result.employee_name or '-' }}</dd>
+          <dt>Hours Worked</dt><dd>{{ result.hours_worked }}</dd>
+          <dt>Hourly Rate</dt><dd>{{ result.hourly_rate }}</dd>
+          <dt>Regular Pay</dt><dd>{{ result.regular_pay }}</dd>
+          <dt>Overtime Hours</dt><dd>{{ result.overtime_hours }}</dd>
+          <dt>Overtime Pay</dt><dd>{{ result.overtime_pay }}</dd>
+          <dt>Gross Pay</dt><dd>{{ result.gross_pay }}</dd>
+          <dt>Tax Paid</dt><dd>{{ result.tax_paid }}</dd>
+          <dt>Net Pay</dt><dd class="strong">{{ result.net_pay }}</dd>
+        </dl>
+      {% else %}
+        <p class="muted">Select or add an employee, then calculate payroll.</p>
+      {% endif %}
+
+      {% if employee and records %}
+        <h2>Payroll history</h2>
+        <table>
+          <thead><tr><th>Date</th><th>Hours</th><th>Gross</th><th>Net</th><th>By</th></tr></thead>
+          <tbody>
+            {% for row in records %}
+              <tr>
+                <td>{{ row.created_at }}</td>
+                <td>{{ row.hours_worked }}</td>
+                <td>INR {{ '%.2f'|format(row.gross_pay) }}</td>
+                <td>INR {{ '%.2f'|format(row.net_pay) }}</td>
+                <td>{{ row.created_by_username or '-' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

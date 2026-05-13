@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Search Employees</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="page single">
+    <section class="card">
+      <div class="topbar">
+        <div><h1>Search Employees</h1><p class="muted">Search by employee ID or employee name.</p></div>
+        <div class="userbox"><strong>{{ current_user.username }}</strong><br><span>{{ current_user.role }}</span><br><a href="{{ url_for('logout') }}">Logout</a></div>
+      </div>
+      <nav class="nav">
+        <a class="secondary" href="{{ url_for('index') }}">Home</a>
+        {% if current_user.role == 'admin' %}<a class="secondary" href="{{ url_for('users') }}">Manage users</a>{% endif %}
+      </nav>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
+        {% endif %}
+      {% endwith %}
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+      <form method="get" action="{{ url_for('employee_search') }}">
+        <div class="grid"><label>Employee name or ID <input name="q" value="{{ query }}" required></label></div>
+        <div class="actions"><button type="submit">Search</button></div>
+      </form>
+      {% if employees %}
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Employer</th><th>Department</th><th>Open</th></tr></thead>
+          <tbody>
+            {% for employee in employees %}
+              <tr>
+                <td>{{ employee.id }}</td>
+                <td>{{ employee.employee_name }}</td>
+                <td>{{ employee.employer or '-' }}</td>
+                <td>{{ employee.department or '-' }}</td>
+                <td><a href="{{ url_for('employee_detail', employee_id=employee.id) }}">View</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% elif query %}
+        <p class="muted">No employees found.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

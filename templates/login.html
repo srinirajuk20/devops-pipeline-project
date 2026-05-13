@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login | Employee Payroll System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="page single">
+    <section class="card auth-card">
+      <h1>Employee Payroll System</h1>
+      <p class="muted">Login is required. Access is controlled by user role/group.</p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert {{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="post" action="{{ url_for('login', next=request.args.get('next', '')) }}">
+        <div class="grid one">
+          <label>Username
+            <input name="username" required value="{{ username or '' }}" autocomplete="username">
+          </label>
+          <label>Password
+            <input name="password" type="password" required autocomplete="current-password">
+          </label>
+        </div>
+        <div class="actions"><button type="submit">Login</button></div>
+      </form>
+
+      <h2>Demo users</h2>
+      <table>
+        <thead><tr><th>Username</th><th>Password</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td>admin</td><td>Admin@123</td><td>admin</td></tr>
+          <tr><td>hr</td><td>Hr@123</td><td>hr</td></tr>
+          <tr><td>finance</td><td>Finance@123</td><td>finance</td></tr>
+          <tr><td>viewer</td><td>Viewer@123</td><td>viewer</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">For real production, change the secret key, remove demo passwords, and use HTTPS/SSO.</p>
+    </section>
+  </main>
+</body>
+</html>
